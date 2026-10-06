@@ -285,14 +285,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const somTecla = document.getElementById('som-tecla');
 
   function tocarSomTecla() {
-    if (!somTecla) return;
+  return new Promise((resolve) => {
 
+    if (!somTecla) {
+      console.error('Elemento de áudio #som-tecla não encontrado.');
+      resolve();
+      return;
+    }
+
+    somTecla.pause();
     somTecla.currentTime = 0;
 
-    somTecla.play().catch(erro => {
-      console.log('Não foi possível reproduzir o som:', erro);
-    });
-  }
+    somTecla.play()
+      .then(() => {
+        console.log('Som iniciado com sucesso.');
+
+        // Espera um pouco para o som ser realmente ouvido
+        setTimeout(resolve, 600);
+      })
+      .catch(erro => {
+        console.error('Erro ao reproduzir o som:', erro);
+        resolve();
+      });
+  });
+}
 
   const cargoTituloEl = document.querySelector('.cargo-nome');
   if (!cargoTituloEl) return;
@@ -348,22 +364,77 @@ if (btnCorrige) {
   });
 }
 
-
-  // Botão CONFIRMA
-  const btnConfirma = document.querySelector('.btn-confirma');
+// Botão CONFIRMA
+const btnConfirma = document.querySelector('.btn-confirma');
 
 if (btnConfirma) {
-  btnConfirma.addEventListener('click', () => {
+  btnConfirma.addEventListener('click', async () => {
+
+    // ==========================================
+    // PRESIDENTE: toca o áudio completo
+    // ==========================================
+    if (cargoAtual === 'PRESIDENTE DA REPÚBLICA') {
+
+      // Campo vazio = voto nulo
+      if (numeroDigitado === '' && !isBranco) {
+        if (msgVotoEl) msgVotoEl.classList.remove('hidden');
+        if (textoMsgEl) textoMsgEl.innerText = 'VOTO NULO';
+      }
+
+      // Impede clicar novamente enquanto o áudio toca
+      btnConfirma.disabled = true;
+
+      // Toca o mesmo áudio até o final
+      if (somTecla) {
+        somTecla.pause();
+        somTecla.currentTime = 0;
+
+        try {
+          await somTecla.play();
+
+          // Espera o áudio terminar
+          await new Promise(resolve => {
+            somTecla.onended = resolve;
+          });
+
+        } catch (erro) {
+          console.error('Erro ao reproduzir áudio:', erro);
+        }
+      }
+
+      // Depois do áudio completo, vai para a tela final
+      salvarEVotar();
+
+      return;
+    }
+
+
+    // ==========================================
+    // OUTROS CARGOS — MANTÉM COMO ESTAVA
+    // ==========================================
 
     tocarSomTecla();
 
-    if (isBranco || numeroDigitado.length === maxDigitos) {
-      salvarEVotar();
+    // Campo vazio = voto nulo
+    if (numeroDigitado === '' && !isBranco) {
+      if (msgVotoEl) msgVotoEl.classList.remove('hidden');
+      if (textoMsgEl) textoMsgEl.innerText = 'VOTO NULO';
+
+      setTimeout(() => {
+        salvarEVotar();
+      }, 700);
+
+      return;
     }
 
+    // Voto branco ou número completo
+    if (isBranco || numeroDigitado.length === maxDigitos) {
+      setTimeout(() => {
+        salvarEVotar();
+      }, 700);
+    }
   });
 }
-
 
   function inserirNumero(num) {
     if (isBranco || numeroDigitado.length >= maxDigitos) return;
@@ -439,21 +510,27 @@ if (btnConfirma) {
   }
 
   function salvarEVotar() {
-    const votos = JSON.parse(localStorage.getItem('votos') || '{}');
-    
-    if (isBranco) {
-      votos[cargoAtual] = 'BRANCO';
-    } else if (configCargo.candidatos[numeroDigitado]) {
-      votos[cargoAtual] = numeroDigitado;
-    } else {
-      votos[cargoAtual] = 'NULO';
-    }
+  const votos = JSON.parse(localStorage.getItem('votos') || '{}');
 
-    localStorage.setItem('votos', JSON.stringify(votos));
+  if (isBranco) {
+    votos[cargoAtual] = 'BRANCO';
 
-    if (configCargo.proximaPagina) {
-      window.location.href = configCargo.proximaPagina;
-    }
+  } else if (numeroDigitado === '') {
+    votos[cargoAtual] = 'NULO';
+
+  } else if (configCargo.candidatos[numeroDigitado]) {
+    votos[cargoAtual] = numeroDigitado;
+
+  } else {
+    votos[cargoAtual] = 'NULO';
   }
+
+  localStorage.setItem('votos', JSON.stringify(votos));
+
+  if (configCargo.proximaPagina) {
+    window.location.href = configCargo.proximaPagina;
+  }
+}
+
 });
 
